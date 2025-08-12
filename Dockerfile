@@ -21,10 +21,11 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install dumb-init for proper signal handling and curl for health checks
+# Install dumb-init for proper signal handling, curl for health checks, and graphviz for visualization
 RUN apt-get update && apt-get install -y \
     dumb-init \
     curl \
+    graphviz \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages from builder
