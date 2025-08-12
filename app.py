@@ -112,8 +112,8 @@ def main():
             model_options = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"]
             default_model = "gpt-4"
         elif selected_provider == "Anthropic":
-            model_options = ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"]
-            default_model = "claude-3-5-sonnet-20241022"
+            model_options = ["claude-sonnet-4-20250514"]
+            default_model = "claude-sonnet-4-20250514"
         elif selected_provider == "Google":
             model_options = ["gemini-pro", "gemini-pro-vision"]
             default_model = "gemini-pro"
