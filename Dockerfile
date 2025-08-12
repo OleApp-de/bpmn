@@ -43,14 +43,8 @@ RUN mkdir -p /app/data
 RUN mkdir -p /root/.streamlit
 COPY .streamlit/config.toml /root/.streamlit/config.toml
 
-# Create non-root user (optional, but good practice)
-RUN addgroup --gid 1001 --system streamlit && \
-    adduser --no-create-home --shell /bin/false --disabled-password --uid 1001 --system --group streamlit
-
-# Change ownership of app directory
-RUN chown -R streamlit:streamlit /app
-
-USER streamlit
+# Keep as root user for simplicity in container environment
+# (Docker containers are isolated anyway)
 
 # Expose port
 EXPOSE 8501
