@@ -1,0 +1,23 @@
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+enableWebsocketCompression = false
+port = 8501
+address = "0.0.0.0"
+maxUploadSize = 200
+maxMessageSize = 200
+allowRunOnSave = true
+
+[browser]
+gatherUsageStats = false
+serverAddress = "0.0.0.0"
+serverPort = 8501
+
+[client]
+caching = true
+displayEnabled = true
+showErrorDetails = true
+
+[logger]
+level = "info"

@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  promoai:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-your_openai_key_here}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-your_anthropic_key_here}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-your_google_key_here}
+      - COHERE_API_KEY=${COHERE_API_KEY:-your_cohere_key_here}
+      - AUTH_USERNAME=${AUTH_USERNAME:-admin}
+      - AUTH_PASSWORD=${AUTH_PASSWORD:-changeme}
+      - ENABLE_AUTH=${ENABLE_AUTH:-true}
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_SERVER_ENABLE_CORS=false
+    volumes:
+      - ./data:/app/data
+    networks:
+      - promoai-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Add a reverse proxy for local testing
+  # nginx:
+  #   image: nginx:alpine
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #   depends_on:
+  #     - promoai
+  #   networks:
+  #     - promoai-network
+
+networks:
+  promoai-network:
+    driver: bridge
+
+volumes:
+  promoai-data:
