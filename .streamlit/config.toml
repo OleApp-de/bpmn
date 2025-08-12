@@ -14,10 +14,8 @@ gatherUsageStats = false
 serverAddress = "0.0.0.0"
 serverPort = 8501
 
-[client]
-caching = true
-displayEnabled = true
-showErrorDetails = true
+[theme]
+base = "light"
 
 [logger]
 level = "info"
