@@ -57,4 +57,4 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=40s --retries=3 \
 ENTRYPOINT ["dumb-init", "--"]
 
 # Start the Streamlit server
-CMD ["streamlit", "run", "app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]
+CMD ["streamlit", "run", "app.py"]
