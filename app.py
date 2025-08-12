@@ -15,7 +15,7 @@ def check_password():
         # Show clean login form
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            st.markdown("## 🔐 Login")
+            st.markdown("## Login")
             
             with st.form("login_form"):
                 username = st.text_input("Benutzername", key="username_form")
@@ -313,7 +313,7 @@ def main():
                             # Save visualization
                             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
                                 pm4py.save_vis_bpmn(bpmn_graph, tmp.name)
-                                st.image(tmp.name, use_column_width=True)
+                                st.image(tmp.name, use_container_width=True)
                                 os.unlink(tmp.name)
                         else:
                             st.info("Diagramm-Visualisierung wird vorbereitet...")

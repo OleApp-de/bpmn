@@ -16,6 +16,7 @@ serverPort = 8501
 
 [theme]
 base = "light"
+primaryColor = "#00ccaf"
 
 [logger]
 level = "info"
