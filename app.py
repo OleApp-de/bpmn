@@ -56,6 +56,20 @@ def main():
         initial_sidebar_state="expanded"
     )
     
+    # Custom CSS to ensure consistent button colors
+    st.markdown("""
+    <style>
+    .stButton > button {
+        border-color: #00ccaf !important;
+        color: #00ccaf !important;
+    }
+    .stButton > button:hover {
+        border-color: #00ccaf !important;
+        color: #00ccaf !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     # Show authentication if enabled
     if ENABLE_AUTH and not check_password():
         return
@@ -131,7 +145,7 @@ def main():
         )
         
         # Reset button
-        if st.button("🔄 Zurücksetzen", use_container_width=True):
+        if st.button("🔄 Zurücksetzen", use_container_width=True, type="secondary"):
             st.session_state["model_gen"] = None
             st.session_state["feedback_history"] = []
             st.session_state["current_bpmn"] = None
@@ -270,7 +284,7 @@ def main():
                     height=100
                 )
                 
-                if st.form_submit_button("Modell aktualisieren", use_container_width=True):
+                if st.form_submit_button("Modell aktualisieren", use_container_width=True, type="primary"):
                     if feedback and st.session_state["model_gen"]:
                         with st.spinner("Aktualisiere Modell..."):
                             try:
