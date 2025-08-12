@@ -13,28 +13,49 @@ def check_password():
     
     def password_entered():
         """Checks whether a password entered by the user is correct."""
-        if (st.session_state["username"] == AUTH_USERNAME and 
-            st.session_state["password"] == AUTH_PASSWORD):
+        if (st.session_state.get("username") == AUTH_USERNAME and 
+            st.session_state.get("password") == AUTH_PASSWORD):
             st.session_state["password_correct"] = True
-            del st.session_state["password"]  # Don't store password
-            del st.session_state["username"]  # Don't store username
+            del st.session_state["password"]
+            del st.session_state["username"]
         else:
             st.session_state["password_correct"] = False
 
     if "password_correct" not in st.session_state:
-        # First run, show inputs for username + password.
-        st.text_input("Benutzername", on_change=password_entered, key="username")
-        st.text_input(
-            "Passwort", type="password", on_change=password_entered, key="password"
-        )
+        # Show clean login form
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("## 🔐 Login")
+            
+            with st.form("login_form"):
+                username = st.text_input("Benutzername", key="username_form")
+                password = st.text_input("Passwort", type="password", key="password_form")
+                submitted = st.form_submit_button("Anmelden", use_container_width=True, type="primary")
+                
+                if submitted:
+                    if username == AUTH_USERNAME and password == AUTH_PASSWORD:
+                        st.session_state["password_correct"] = True
+                        st.rerun()
+                    else:
+                        st.error("❌ Ungültige Anmeldedaten")
         return False
     elif not st.session_state["password_correct"]:
-        # Password not correct, show input + error.
-        st.text_input("Benutzername", on_change=password_entered, key="username")
-        st.text_input(
-            "Passwort", type="password", on_change=password_entered, key="password"
-        )
-        st.error("Benutzername oder Passwort falsch")
+        # Password not correct, show form again
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("## 🔐 Login")
+            
+            with st.form("login_form_retry"):
+                username = st.text_input("Benutzername", key="username_retry")
+                password = st.text_input("Passwort", type="password", key="password_retry")
+                submitted = st.form_submit_button("Anmelden", use_container_width=True, type="primary")
+                
+                if submitted:
+                    if username == AUTH_USERNAME and password == AUTH_PASSWORD:
+                        st.session_state["password_correct"] = True
+                        st.rerun()
+                    else:
+                        st.error("❌ Ungültige Anmeldedaten")
         return False
     else:
         # Password correct.
@@ -67,8 +88,6 @@ def main():
     
     # Show authentication if enabled
     if ENABLE_AUTH and not check_password():
-        st.markdown("# ProMoAI - Enterprise Edition")
-        st.markdown("Bitte melden Sie sich an, um fortzufahren.")
         return
     
     # Get available API keys
