@@ -69,11 +69,11 @@ class ProMoAI:
         else:
             raise ValueError(f"Provider {self.provider} not supported or library not installed")
     
-    def generate_bpmn_from_text(self, description: str) -> Dict[str, Any]:
+    def generate_bpmn_from_text(self, description: str, custom_instructions: str = "") -> Dict[str, Any]:
         """Generate BPMN model from text description"""
         
         # Create prompt for BPMN generation
-        prompt = f"""
+        base_prompt = f"""
         Convert the following process description into a BPMN 2.0 XML format:
         
         {description}
@@ -83,6 +83,19 @@ class ProMoAI:
         - Tasks/activities
         - Gateways (if needed)
         - Sequence flows
+        """
+        
+        # Add custom instructions if provided
+        if custom_instructions:
+            prompt = base_prompt + f"""
+        
+        Additional instructions:
+        {custom_instructions}
+        
+        Return only the XML code without any explanation.
+        """
+        else:
+            prompt = base_prompt + """
         
         Return only the XML code without any explanation.
         """

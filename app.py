@@ -155,8 +155,17 @@ def main():
             process_description = st.text_area(
                 "Prozessbeschreibung:",
                 placeholder="Beschreiben Sie Ihren Geschäftsprozess in natürlicher Sprache...",
-                height=200
+                height=150
             )
+            
+            # Optional instructions field
+            with st.expander("⚙️ Erweiterte Optionen"):
+                custom_instructions = st.text_area(
+                    "Zusätzliche Anweisungen (optional):",
+                    placeholder="z.B.: Verwende deutsche Bezeichnungen, füge Swimlanes hinzu, nutze Message Events für Kommunikation, erstelle parallele Gateways wo möglich...",
+                    height=80,
+                    help="Diese Anweisungen werden dem AI-Prompt hinzugefügt um das Ergebnis zu beeinflussen"
+                )
             
             if st.button("🚀 Modell generieren", type="primary", use_container_width=True):
                 if process_description:
@@ -164,11 +173,12 @@ def main():
                         try:
                             api_key = available_keys[selected_provider]
                             promoai = ProMoAI(selected_provider, api_key, selected_model)
-                            result = promoai.generate_bpmn_from_text(process_description)
+                            result = promoai.generate_bpmn_from_text(process_description, custom_instructions)
                             
                             if result["status"] == "success":
                                 st.session_state["current_bpmn"] = result["bpmn_xml"]
                                 st.session_state["model_gen"] = promoai
+                                st.session_state["custom_instructions"] = custom_instructions
                                 st.success("✅ Modell erfolgreich generiert!")
                         except Exception as e:
                             st.error(f"Fehler: {str(e)}")
@@ -269,7 +279,9 @@ def main():
                                 current_model = st.session_state["current_bpmn"]
                                 prompt = f"Update this BPMN model based on feedback: {feedback}\n\nCurrent model:\n{current_model}"
                                 
-                                result = st.session_state["model_gen"].generate_bpmn_from_text(prompt)
+                                # Keep custom instructions if they exist
+                                custom_inst = st.session_state.get("custom_instructions", "")
+                                result = st.session_state["model_gen"].generate_bpmn_from_text(prompt, custom_inst)
                                 
                                 if result["status"] == "success":
                                     st.session_state["current_bpmn"] = result["bpmn_xml"]
