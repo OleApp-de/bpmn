@@ -79,11 +79,14 @@ def main():
         st.info("Die folgenden Umgebungsvariablen müssen gesetzt werden: OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, oder COHERE_API_KEY")
         return
     
-    # Import ProMoAI components (assuming they exist)
+    # Import ProMoAI components
     try:
-        import promoai
-    except ImportError:
-        st.error("ProMoAI Module nicht gefunden. Bitte Installation prüfen.")
+        from promoai import ProMoAI, analyze_event_log
+        import pm4py
+        from pm4py.visualization.bpmn import visualizer as bpmn_visualizer
+    except ImportError as e:
+        st.error(f"Fehler beim Import der ProMoAI Module: {str(e)}")
+        st.info("Bitte stellen Sie sicher, dass alle Abhängigkeiten installiert sind.")
         return
     
     # Main ProMoAI interface
@@ -145,14 +148,45 @@ def main():
             if process_description:
                 with st.spinner("Generiere BPMN Diagramm..."):
                     try:
-                        # Here you would call the actual ProMoAI functions
-                        # For now, showing placeholder
-                        st.success("✅ BPMN Diagramm erfolgreich generiert!")
-                        st.info("🚧 ProMoAI Integration wird geladen...")
+                        # Initialize ProMoAI with selected provider
+                        api_key = available_keys[selected_provider]
+                        promoai_instance = ProMoAI(selected_provider, api_key, selected_model)
                         
-                        # Placeholder for BPMN visualization
-                        st.markdown("### Generiertes BPMN Diagramm")
-                        st.info("Das generierte BPMN Diagramm wird hier angezeigt...")
+                        # Generate BPMN from text
+                        result = promoai_instance.generate_bpmn_from_text(process_description)
+                        
+                        if result["status"] == "success":
+                            st.success("✅ BPMN Diagramm erfolgreich generiert!")
+                            
+                            # Store in session state
+                            st.session_state['generated_bpmn'] = result["bpmn_xml"]
+                            
+                            # Display BPMN XML
+                            with st.expander("BPMN XML anzeigen"):
+                                st.code(result["bpmn_xml"], language="xml")
+                            
+                            # Visualize BPMN if possible
+                            try:
+                                bpmn_graph = promoai_instance.visualize_bpmn(result["bpmn_xml"])
+                                if bpmn_graph:
+                                    st.markdown("### Generiertes BPMN Diagramm")
+                                    # Save visualization to temp file
+                                    import tempfile
+                                    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                                        pm4py.save_vis_bpmn(bpmn_graph, tmp.name)
+                                        st.image(tmp.name)
+                            except Exception as viz_error:
+                                st.warning(f"Visualisierung nicht möglich: {str(viz_error)}")
+                            
+                            # Download button
+                            st.download_button(
+                                label="📥 BPMN herunterladen",
+                                data=result["bpmn_xml"],
+                                file_name="process_model.bpmn",
+                                mime="application/xml"
+                            )
+                        else:
+                            st.error(f"Fehler: {result['message']}")
                         
                     except Exception as e:
                         st.error(f"Fehler bei der Generierung: {str(e)}")
