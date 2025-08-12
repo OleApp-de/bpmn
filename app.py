@@ -85,8 +85,7 @@ def main():
         st.session_state["current_bpmn"] = None
     
     # Main ProMoAI interface
-    st.markdown("# ProMoAI - Process Modeling with AI")
-    st.markdown("*Enterprise Edition - Automatische BPMN-Generierung und Verfeinerung*")
+    st.markdown("# AI Process Modeling")
     
     # Sidebar for provider selection
     with st.sidebar:
