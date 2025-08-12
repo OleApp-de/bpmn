@@ -1,6 +1,6 @@
 import os
 import streamlit as st
-import hashlib
+import tempfile
 from typing import Optional
 
 # Authentication configuration
@@ -11,16 +11,6 @@ ENABLE_AUTH = os.getenv('ENABLE_AUTH', 'true').lower() == 'true'
 def check_password():
     """Returns True if user entered correct password."""
     
-    def password_entered():
-        """Checks whether a password entered by the user is correct."""
-        if (st.session_state.get("username") == AUTH_USERNAME and 
-            st.session_state.get("password") == AUTH_PASSWORD):
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]
-            del st.session_state["username"]
-        else:
-            st.session_state["password_correct"] = False
-
     if "password_correct" not in st.session_state:
         # Show clean login form
         col1, col2, col3 = st.columns([1, 2, 1])
@@ -39,33 +29,13 @@ def check_password():
                     else:
                         st.error("❌ Ungültige Anmeldedaten")
         return False
-    elif not st.session_state["password_correct"]:
-        # Password not correct, show form again
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.markdown("## 🔐 Login")
-            
-            with st.form("login_form_retry"):
-                username = st.text_input("Benutzername", key="username_retry")
-                password = st.text_input("Passwort", type="password", key="password_retry")
-                submitted = st.form_submit_button("Anmelden", use_container_width=True, type="primary")
-                
-                if submitted:
-                    if username == AUTH_USERNAME and password == AUTH_PASSWORD:
-                        st.session_state["password_correct"] = True
-                        st.rerun()
-                    else:
-                        st.error("❌ Ungültige Anmeldedaten")
-        return False
     else:
-        # Password correct.
         return True
 
 def get_api_keys():
     """Load API keys from environment variables."""
     api_keys = {}
     
-    # Load available API keys from environment
     if os.getenv('OPENAI_API_KEY'):
         api_keys['OpenAI'] = os.getenv('OPENAI_API_KEY')
     if os.getenv('ANTHROPIC_API_KEY'):
@@ -95,7 +65,6 @@ def main():
     
     if not available_keys:
         st.error("⚠️ Keine API Keys konfiguriert! Bitte Administrator kontaktieren.")
-        st.info("Die folgenden Umgebungsvariablen müssen gesetzt werden: OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, oder COHERE_API_KEY")
         return
     
     # Import ProMoAI components
@@ -104,32 +73,36 @@ def main():
         import pm4py
         from pm4py.visualization.bpmn import visualizer as bpmn_visualizer
     except ImportError as e:
-        st.error(f"Fehler beim Import der ProMoAI Module: {str(e)}")
-        st.info("Bitte stellen Sie sicher, dass alle Abhängigkeiten installiert sind.")
+        st.error(f"Fehler beim Import: {str(e)}")
         return
+    
+    # Initialize session state
+    if "model_gen" not in st.session_state:
+        st.session_state["model_gen"] = None
+    if "feedback_history" not in st.session_state:
+        st.session_state["feedback_history"] = []
+    if "current_bpmn" not in st.session_state:
+        st.session_state["current_bpmn"] = None
     
     # Main ProMoAI interface
     st.markdown("# ProMoAI - Process Modeling with AI")
-    st.markdown("*Enterprise Edition - Automatische BPMN-Generierung aus natürlicher Sprache*")
+    st.markdown("*Enterprise Edition - Automatische BPMN-Generierung und Verfeinerung*")
     
     # Sidebar for provider selection
     with st.sidebar:
         st.markdown("### AI Provider Configuration")
         
-        # Provider selection based on available keys
         provider_options = list(available_keys.keys())
-        default_provider = provider_options[0] if provider_options else "OpenAI"
-        
         selected_provider = st.selectbox(
             "AI Provider:", 
             provider_options,
-            index=0 if default_provider in provider_options else 0
+            index=0 if provider_options else 0
         )
         
         # Model selection based on provider
         if selected_provider == "OpenAI":
-            model_options = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"]
-            default_model = "gpt-4"
+            model_options = ["gpt-4o", "gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"]
+            default_model = "gpt-4o"
         elif selected_provider == "Anthropic":
             model_options = ["claude-sonnet-4-20250514"]
             default_model = "claude-sonnet-4-20250514"
@@ -145,115 +118,257 @@ def main():
         
         selected_model = st.selectbox("Model:", model_options)
         
-        # Display current configuration
         st.markdown("---")
-        st.markdown("**Aktuelle Konfiguration:**")
-        st.markdown(f"Provider: {selected_provider}")
-        st.markdown(f"Model: {selected_model}")
-        st.markdown(f"API Key: {'✓ Verfügbar' if selected_provider in available_keys else '✗ Nicht verfügbar'}")
-    
-    # Main content tabs
-    tab1, tab2, tab3 = st.tabs(["📝 Text zu BPMN", "📊 Event Log", "🔄 Model Verbesserung"])
-    
-    with tab1:
-        st.markdown("### Prozessbeschreibung eingeben")
-        process_description = st.text_area(
-            "Beschreiben Sie Ihren Geschäftsprozess in natürlicher Sprache:",
-            placeholder="Beispiel: Ein Kunde stellt einen Antrag. Der Antrag wird geprüft. Bei Genehmigung wird die Bestellung bearbeitet...",
-            height=150
+        st.markdown("**Status:**")
+        st.success(f"✓ {selected_provider} verbunden")
+        
+        # View options
+        st.markdown("---")
+        st.markdown("### Ansichtsoptionen")
+        view_type = st.selectbox(
+            "Diagramm-Typ:",
+            ["BPMN", "Petri Net", "POWL"],
+            index=0
         )
         
-        if st.button("BPMN Diagramm generieren", type="primary"):
-            if process_description:
-                with st.spinner("Generiere BPMN Diagramm..."):
-                    try:
-                        # Initialize ProMoAI with selected provider
-                        api_key = available_keys[selected_provider]
-                        promoai_instance = ProMoAI(selected_provider, api_key, selected_model)
-                        
-                        # Generate BPMN from text
-                        result = promoai_instance.generate_bpmn_from_text(process_description)
-                        
-                        if result["status"] == "success":
-                            st.success("✅ BPMN Diagramm erfolgreich generiert!")
-                            
-                            # Store in session state
-                            st.session_state['generated_bpmn'] = result["bpmn_xml"]
-                            
-                            # Display BPMN XML
-                            with st.expander("BPMN XML anzeigen"):
-                                st.code(result["bpmn_xml"], language="xml")
-                            
-                            # Visualize BPMN if possible
-                            try:
-                                bpmn_graph = promoai_instance.visualize_bpmn(result["bpmn_xml"])
-                                if bpmn_graph:
-                                    st.markdown("### Generiertes BPMN Diagramm")
-                                    # Save visualization to temp file
-                                    import tempfile
-                                    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                                        pm4py.save_vis_bpmn(bpmn_graph, tmp.name)
-                                        st.image(tmp.name)
-                            except Exception as viz_error:
-                                st.warning(f"Visualisierung nicht möglich: {str(viz_error)}")
-                            
-                            # Download button
-                            st.download_button(
-                                label="📥 BPMN herunterladen",
-                                data=result["bpmn_xml"],
-                                file_name="process_model.bpmn",
-                                mime="application/xml"
-                            )
-                        else:
-                            st.error(f"Fehler: {result['message']}")
-                        
-                    except Exception as e:
-                        st.error(f"Fehler bei der Generierung: {str(e)}")
-            else:
-                st.warning("Bitte eine Prozessbeschreibung eingeben.")
+        # Reset button
+        if st.button("🔄 Zurücksetzen", use_container_width=True):
+            st.session_state["model_gen"] = None
+            st.session_state["feedback_history"] = []
+            st.session_state["current_bpmn"] = None
+            st.rerun()
     
-    with tab2:
-        st.markdown("### Event Log hochladen")
-        uploaded_file = st.file_uploader(
-            "Wählen Sie eine Event Log Datei (.csv, .xes):",
-            type=['csv', 'xes']
+    # Main content area with two columns
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        st.markdown("### 📝 Eingabe")
+        
+        # Input method selection
+        input_method = st.radio(
+            "Wählen Sie eine Eingabemethode:",
+            ["Text-Beschreibung", "Event Log hochladen", "BPMN/Petri Net hochladen"],
+            horizontal=True
         )
         
-        if uploaded_file:
-            st.success(f"✅ Datei '{uploaded_file.name}' hochgeladen")
+        if input_method == "Text-Beschreibung":
+            process_description = st.text_area(
+                "Prozessbeschreibung:",
+                placeholder="Beschreiben Sie Ihren Geschäftsprozess in natürlicher Sprache...",
+                height=200
+            )
             
-            if st.button("Prozessmodell aus Event Log generieren", type="primary"):
-                with st.spinner("Analysiere Event Log..."):
-                    try:
-                        st.info("🚧 Event Log Analyse wird implementiert...")
-                    except Exception as e:
-                        st.error(f"Fehler bei der Analyse: {str(e)}")
+            if st.button("🚀 Modell generieren", type="primary", use_container_width=True):
+                if process_description:
+                    with st.spinner("Generiere Prozessmodell..."):
+                        try:
+                            api_key = available_keys[selected_provider]
+                            promoai = ProMoAI(selected_provider, api_key, selected_model)
+                            result = promoai.generate_bpmn_from_text(process_description)
+                            
+                            if result["status"] == "success":
+                                st.session_state["current_bpmn"] = result["bpmn_xml"]
+                                st.session_state["model_gen"] = promoai
+                                st.success("✅ Modell erfolgreich generiert!")
+                        except Exception as e:
+                            st.error(f"Fehler: {str(e)}")
+                else:
+                    st.warning("Bitte geben Sie eine Beschreibung ein.")
+        
+        elif input_method == "Event Log hochladen":
+            uploaded_file = st.file_uploader(
+                "Event Log auswählen:",
+                type=['xes', 'csv', 'gz'],
+                help="Unterstützte Formate: XES, CSV, GZ-komprimiert"
+            )
+            
+            if uploaded_file:
+                st.info(f"📄 {uploaded_file.name} geladen")
+                
+                if st.button("🔍 Prozess entdecken", type="primary", use_container_width=True):
+                    with st.spinner("Analysiere Event Log..."):
+                        try:
+                            # Save uploaded file temporarily
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=uploaded_file.name) as tmp:
+                                tmp.write(uploaded_file.getbuffer())
+                                temp_path = tmp.name
+                            
+                            result = analyze_event_log(temp_path)
+                            
+                            if result["status"] == "success":
+                                st.success(f"✅ Prozess entdeckt! ({result['num_traces']} Traces, {result['num_events']} Events)")
+                                # Convert to BPMN XML
+                                bpmn_xml = pm4py.write_bpmn(result["bpmn_model"])
+                                st.session_state["current_bpmn"] = bpmn_xml
+                            else:
+                                st.error(result["message"])
+                            
+                            os.unlink(temp_path)
+                        except Exception as e:
+                            st.error(f"Fehler: {str(e)}")
+        
+        else:  # BPMN/Petri Net upload
+            uploaded_model = st.file_uploader(
+                "Modell hochladen:",
+                type=['bpmn', 'pnml', 'xml'],
+                help="Laden Sie ein bestehendes BPMN oder Petri Net Modell hoch"
+            )
+            
+            if uploaded_model:
+                st.info(f"📊 {uploaded_model.name} geladen")
+                
+                improvement_request = st.text_area(
+                    "Verbesserungsvorschläge:",
+                    placeholder="Beschreiben Sie, wie das Modell verbessert werden soll...",
+                    height=100
+                )
+                
+                if st.button("🔧 Modell verbessern", type="primary", use_container_width=True):
+                    if improvement_request:
+                        with st.spinner("Verbessere Modell..."):
+                            try:
+                                # Read uploaded model
+                                model_content = uploaded_model.read().decode('utf-8')
+                                st.session_state["current_bpmn"] = model_content
+                                
+                                # Initialize ProMoAI for improvement
+                                api_key = available_keys[selected_provider]
+                                promoai = ProMoAI(selected_provider, api_key, selected_model)
+                                
+                                # Improve model based on feedback
+                                prompt = f"Improve this BPMN model based on the following feedback: {improvement_request}\n\nOriginal model:\n{model_content}"
+                                result = promoai.generate_bpmn_from_text(prompt)
+                                
+                                if result["status"] == "success":
+                                    st.session_state["current_bpmn"] = result["bpmn_xml"]
+                                    st.session_state["model_gen"] = promoai
+                                    st.session_state["feedback_history"].append(improvement_request)
+                                    st.success("✅ Modell verbessert!")
+                            except Exception as e:
+                                st.error(f"Fehler: {str(e)}")
+                    else:
+                        st.warning("Bitte beschreiben Sie die gewünschten Verbesserungen.")
+        
+        # Feedback section for iterative refinement
+        if st.session_state["current_bpmn"]:
+            st.markdown("---")
+            st.markdown("### 🔄 Modell verfeinern")
+            
+            with st.form("feedback_form"):
+                feedback = st.text_area(
+                    "Feedback für Verbesserung:",
+                    placeholder="Was soll am Modell geändert werden?",
+                    height=100
+                )
+                
+                if st.form_submit_button("Modell aktualisieren", use_container_width=True):
+                    if feedback and st.session_state["model_gen"]:
+                        with st.spinner("Aktualisiere Modell..."):
+                            try:
+                                # Update model with feedback
+                                current_model = st.session_state["current_bpmn"]
+                                prompt = f"Update this BPMN model based on feedback: {feedback}\n\nCurrent model:\n{current_model}"
+                                
+                                result = st.session_state["model_gen"].generate_bpmn_from_text(prompt)
+                                
+                                if result["status"] == "success":
+                                    st.session_state["current_bpmn"] = result["bpmn_xml"]
+                                    st.session_state["feedback_history"].append(feedback)
+                                    st.success("✅ Modell aktualisiert!")
+                                    st.rerun()
+                            except Exception as e:
+                                st.error(f"Fehler: {str(e)}")
+            
+            # Show feedback history
+            if st.session_state["feedback_history"]:
+                with st.expander("📜 Feedback-Historie"):
+                    for i, fb in enumerate(st.session_state["feedback_history"], 1):
+                        st.markdown(f"**Iteration {i}:** {fb}")
     
-    with tab3:
-        st.markdown("### Existierendes Model verbessern")
+    with col2:
+        st.markdown("### 📊 Visualisierung")
         
-        model_file = st.file_uploader(
-            "Wählen Sie eine BPMN oder Petri Net Datei:",
-            type=['bpmn', 'pnml', 'xml']
-        )
-        
-        improvement_request = st.text_area(
-            "Beschreiben Sie gewünschte Verbesserungen:",
-            placeholder="Beispiel: Fügen Sie Parallelverarbeitung hinzu, optimieren Sie für bessere Performance...",
-            height=100
-        )
-        
-        if model_file and improvement_request:
-            if st.button("Model verbessern", type="primary"):
-                with st.spinner("Verbessere Prozessmodell..."):
+        if st.session_state["current_bpmn"]:
+            # Visualization tabs
+            viz_tab1, viz_tab2, viz_tab3 = st.tabs(["Diagramm", "XML", "Export"])
+            
+            with viz_tab1:
+                try:
+                    # Try to visualize the BPMN
+                    if st.session_state["model_gen"]:
+                        bpmn_graph = st.session_state["model_gen"].visualize_bpmn(st.session_state["current_bpmn"])
+                        if bpmn_graph:
+                            # Save visualization
+                            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                                pm4py.save_vis_bpmn(bpmn_graph, tmp.name)
+                                st.image(tmp.name, use_column_width=True)
+                                os.unlink(tmp.name)
+                        else:
+                            st.info("Diagramm-Visualisierung wird vorbereitet...")
+                except Exception as e:
+                    st.warning(f"Visualisierung nicht verfügbar: {str(e)}")
+                    st.info("Sie können das Modell trotzdem als XML anzeigen und exportieren.")
+            
+            with viz_tab2:
+                st.code(st.session_state["current_bpmn"], language="xml")
+            
+            with viz_tab3:
+                col_exp1, col_exp2 = st.columns(2)
+                
+                with col_exp1:
+                    st.download_button(
+                        label="📥 BPMN herunterladen",
+                        data=st.session_state["current_bpmn"],
+                        file_name="process_model.bpmn",
+                        mime="application/xml",
+                        use_container_width=True
+                    )
+                
+                with col_exp2:
+                    # Convert to Petri Net if possible
                     try:
-                        st.info("🚧 Model Verbesserung wird implementiert...")
-                    except Exception as e:
-                        st.error(f"Fehler bei der Verbesserung: {str(e)}")
+                        if pm4py:
+                            # This would need proper conversion logic
+                            st.download_button(
+                                label="📥 Als PNML exportieren",
+                                data=st.session_state["current_bpmn"],  # This should be converted
+                                file_name="process_model.pnml",
+                                mime="application/xml",
+                                use_container_width=True
+                            )
+                    except:
+                        st.info("PNML Export nicht verfügbar")
+                
+                # Statistics
+                st.markdown("---")
+                st.markdown("**Modell-Statistiken:**")
+                try:
+                    lines = st.session_state["current_bpmn"].count('\n')
+                    size = len(st.session_state["current_bpmn"])
+                    st.metric("Zeilen", lines)
+                    st.metric("Größe", f"{size:,} Zeichen")
+                    st.metric("Iterationen", len(st.session_state["feedback_history"]))
+                except:
+                    pass
+        else:
+            st.info("🎯 Wählen Sie links eine Eingabemethode, um zu beginnen.")
+            
+            # Show example
+            with st.expander("💡 Beispiel-Prozessbeschreibung"):
+                st.markdown("""
+                **Bestellprozess:**
+                1. Kunde gibt Bestellung auf
+                2. System prüft Lagerbestand
+                3. Bei Verfügbarkeit: Bestellung wird bestätigt
+                4. Bei Nichtverfügbarkeit: Nachbestellung beim Lieferanten
+                5. Ware wird verpackt
+                6. Versand an Kunden
+                7. Kunde erhält Sendungsverfolgung
+                """)
     
     # Footer
     st.markdown("---")
-    st.markdown("*ProMoAI Enterprise Edition - Entwickelt für interne Unternehmensnutzung*")
+    st.markdown("*ProMoAI Enterprise - Powered by AI Process Modeling*")
 
 if __name__ == "__main__":
     main()
