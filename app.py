@@ -378,9 +378,6 @@ def main():
                 7. Kunde erhält Sendungsverfolgung
                 """)
     
-    # Footer
-    st.markdown("---")
-    st.markdown("*ProMoAI Enterprise - Powered by AI Process Modeling*")
 
 if __name__ == "__main__":
     main()

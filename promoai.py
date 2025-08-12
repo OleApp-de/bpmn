@@ -201,6 +201,16 @@ class ProMoAI:
         # Remove any leading/trailing whitespace
         xml_text = xml_text.strip()
         
+        # Fix common XML issues
+        import re
+        
+        # Replace curly quotes with straight quotes
+        xml_text = xml_text.replace('"', '"').replace('"', '"')
+        xml_text = xml_text.replace(''', "'").replace(''', "'")
+        
+        # Fix attribute quotes - ensure all attributes use double quotes
+        xml_text = re.sub(r"(\w+)='([^']*)'", r'\1="\2"', xml_text)
+        
         # Ensure it starts with <?xml
         if not xml_text.startswith("<?xml"):
             xml_text = '<?xml version="1.0" encoding="UTF-8"?>\n' + xml_text
